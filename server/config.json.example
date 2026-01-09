@@ -1,0 +1,26 @@
+{
+  "server": {
+    "port": 3000,
+    "host": "0.0.0.0"
+  },
+  "log": {
+    "enable": true,
+    "dir": "./logs",
+    "maxFiles": 30
+  },
+  "storage": {
+    "enable": true,
+    "dir": "./data",
+    "autoSaveInterval": 5
+  },
+  "users": [
+    {
+      "username": "示例用户1",
+      "password": "password123"
+    },
+    {
+      "username": "示例用户2",
+      "password": "password456"
+    }
+  ]
+}
