@@ -27,6 +27,15 @@
       "target": ["nsis"],
       "icon": "assets/icon.ico"
     },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "perMachine": false,
+      "allowElevation": true,
+      "deleteAppDataOnUninstall": false
+    },
     "mac": {
       "target": ["dmg"],
       "icon": "assets/icon.icns"
