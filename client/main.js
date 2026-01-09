@@ -72,7 +72,7 @@ function createTray() {
     }}
   ]);
 
-  tray.setToolTip('订阅通知小助手');
+  tray.setToolTip('通知小助手');
   tray.setContextMenu(contextMenu);
 
   tray.on('double-click', () => {
