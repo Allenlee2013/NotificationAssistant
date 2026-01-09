@@ -7,6 +7,32 @@ let mainWindow;
 let tray;
 let activeNotifications = new Map(); // 存储活跃的通知
 
+// 设置开机自启动
+function setAutoStart(enable) {
+  if (process.platform === 'win32') {
+    app.setLoginItemSettings({
+      openAtLogin: enable,
+      openAsHidden: true
+    });
+  } else if (process.platform === 'darwin') {
+    app.setLoginItemSettings({
+      openAtLogin: enable,
+      openAsHidden: true
+    });
+  } else if (process.platform === 'linux') {
+    app.setLoginItemSettings({
+      openAtLogin: enable,
+      openAsHidden: false
+    });
+  }
+}
+
+// 获取当前开机自启动状态
+function getAutoStartStatus() {
+  const loginItemSettings = app.getLoginItemSettings();
+  return loginItemSettings.openAtLogin;
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 900,
@@ -139,6 +165,12 @@ function forceRemoveNotification(messageId) {
 }
 
 app.whenReady().then(() => {
+  // 检查并应用开机自启动设置
+  const autoStartEnabled = store.get('autoStart', false);
+  if (autoStartEnabled) {
+    setAutoStart(true);
+  }
+
   createWindow();
   createTray();
 
@@ -182,4 +214,14 @@ ipcMain.on('save-config', (event, config) => {
 
 ipcMain.on('get-config', (event) => {
   event.reply('config-response', store.get('config', {}));
+});
+
+ipcMain.on('set-auto-start', (event, enable) => {
+  setAutoStart(enable);
+  store.set('autoStart', enable);
+});
+
+ipcMain.on('get-auto-start', (event) => {
+  const enabled = getAutoStartStatus();
+  event.reply('auto-start-status', enabled);
 });

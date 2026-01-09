@@ -127,6 +127,26 @@ textarea {
   min-height: 80px;
 }
 
+/* 复选框样式 */
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}
+
+.checkbox-label span {
+  color: #666;
+  font-size: 14px;
+}
+
 small {
   display: block;
   margin-top: 5px;

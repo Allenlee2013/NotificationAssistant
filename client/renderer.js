@@ -12,6 +12,7 @@ const passwordInput = document.getElementById('password');
 const connectBtn = document.getElementById('connectBtn');
 const currentUserIdSpan = document.getElementById('currentUserId');
 const connectionStatusSpan = document.getElementById('connectionStatus');
+const autoStartCheckbox = document.getElementById('autoStartCheckbox');
 
 const topicInput = document.getElementById('topicInput');
 const subscribeBtn = document.getElementById('subscribeBtn');
@@ -865,9 +866,23 @@ ipcRenderer.on('notification-closed', (_, { messageId }) => {
   }
 });
 
+// 监听开机自启动状态响应
+ipcRenderer.on('auto-start-status', (_, enabled) => {
+  autoStartCheckbox.checked = enabled;
+  console.log('Auto-start status:', enabled);
+});
+
+// 开机自启动复选框事件
+autoStartCheckbox.addEventListener('change', () => {
+  const enabled = autoStartCheckbox.checked;
+  ipcRenderer.send('set-auto-start', enabled);
+  showToast(enabled ? '开机自启动已开启' : '开机自启动已关闭', 'success');
+});
+
 // 页面加载时获取配置
 window.addEventListener('load', () => {
   ipcRenderer.send('get-config');
+  ipcRenderer.send('get-auto-start'); // 获取开机自启动状态
   initTabs(); // 初始化标签页切换
   updateAvailableTopics();
   updateScheduledMessagesList();
