@@ -13,6 +13,7 @@ const connectBtn = document.getElementById('connectBtn');
 const currentUserIdSpan = document.getElementById('currentUserId');
 const connectionStatusSpan = document.getElementById('connectionStatus');
 const autoStartCheckbox = document.getElementById('autoStartCheckbox');
+const centerNotificationCheckbox = document.getElementById('centerNotificationCheckbox');
 
 const topicInput = document.getElementById('topicInput');
 const subscribeBtn = document.getElementById('subscribeBtn');
@@ -808,6 +809,7 @@ function saveConfig() {
     serverUrl: serverUrlInput.value,
     username: usernameInput.value,
     password: passwordInput.value,
+    centerNotification: centerNotificationCheckbox.checked,
     autoSubscribeTopics: subscriptions // 保存当前订阅的主题
   };
   ipcRenderer.send('save-config', config);
@@ -824,6 +826,9 @@ ipcRenderer.on('config-response', (_, config) => {
   }
   if (config.password) {
     passwordInput.value = config.password;
+  }
+  if (config.centerNotification !== undefined) {
+    centerNotificationCheckbox.checked = config.centerNotification;
   }
   if (config.autoSubscribeTopics && Array.isArray(config.autoSubscribeTopics)) {
     // 保存自动订阅的主题列表，连接成功后会自动订阅
@@ -877,6 +882,13 @@ autoStartCheckbox.addEventListener('change', () => {
   const enabled = autoStartCheckbox.checked;
   ipcRenderer.send('set-auto-start', enabled);
   showToast(enabled ? '开机自启动已开启' : '开机自启动已关闭', 'success');
+});
+
+// 居中显示通知复选框事件
+centerNotificationCheckbox.addEventListener('change', () => {
+  const enabled = centerNotificationCheckbox.checked;
+  saveConfig();
+  showToast(enabled ? '已启用居中显示通知' : '已禁用居中显示通知', 'success');
 });
 
 // 页面加载时获取配置
