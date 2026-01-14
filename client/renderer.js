@@ -14,6 +14,7 @@ const currentUserIdSpan = document.getElementById('currentUserId');
 const connectionStatusSpan = document.getElementById('connectionStatus');
 const autoStartCheckbox = document.getElementById('autoStartCheckbox');
 const centerNotificationCheckbox = document.getElementById('centerNotificationCheckbox');
+const emailNotificationCheckbox = document.getElementById('emailNotificationCheckbox');
 
 const topicInput = document.getElementById('topicInput');
 const subscribeBtn = document.getElementById('subscribeBtn');
@@ -306,6 +307,8 @@ function handleServerMessage(data) {
         });
       }
 
+
+
       // 拉取定时消息列表
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
@@ -368,6 +371,14 @@ function handleServerMessage(data) {
         updateImmediateMessagesList();
         showNotification(payload);
         console.log('即时消息添加到列表');
+      }
+
+      // 发送邮件通知（如果启用）
+      if (emailNotificationCheckbox.checked) {
+        ipcRenderer.send('send-email-notification', {
+          title: `[${payload.topic}] 新消息`,
+          body: `${payload.sender}: ${payload.content}\n\n时间: ${new Date(payload.timestamp).toLocaleString('zh-CN')}`
+        });
       }
       break;
 
@@ -810,6 +821,7 @@ function saveConfig() {
     username: usernameInput.value,
     password: passwordInput.value,
     centerNotification: centerNotificationCheckbox.checked,
+    emailNotification: emailNotificationCheckbox.checked,
     autoSubscribeTopics: subscriptions // 保存当前订阅的主题
   };
   ipcRenderer.send('save-config', config);
@@ -829,6 +841,14 @@ ipcRenderer.on('config-response', (_, config) => {
   }
   if (config.centerNotification !== undefined) {
     centerNotificationCheckbox.checked = config.centerNotification;
+  }
+  if (config.emailNotification !== undefined) {
+    emailNotificationCheckbox.checked = config.emailNotification;
+    // 如果启用了邮件通知，显示SMTP配置按钮
+    const smtpConfigGroup = document.getElementById('smtpConfigGroup');
+    if (emailNotificationCheckbox.checked && smtpConfigGroup) {
+      smtpConfigGroup.style.display = 'block';
+    }
   }
   if (config.autoSubscribeTopics && Array.isArray(config.autoSubscribeTopics)) {
     // 保存自动订阅的主题列表，连接成功后会自动订阅
@@ -889,6 +909,144 @@ centerNotificationCheckbox.addEventListener('change', () => {
   const enabled = centerNotificationCheckbox.checked;
   saveConfig();
   showToast(enabled ? '已启用居中显示通知' : '已禁用居中显示通知', 'success');
+});
+
+// 邮件通知复选框事件
+emailNotificationCheckbox.addEventListener('change', () => {
+  const enabled = emailNotificationCheckbox.checked;
+  const smtpConfigGroup = document.getElementById('smtpConfigGroup');
+
+  if (enabled) {
+    // 显示SMTP配置按钮
+    smtpConfigGroup.style.display = 'block';
+    showToast('已启用邮件通知', 'success');
+  } else {
+    // 隐藏SMTP配置按钮
+    smtpConfigGroup.style.display = 'none';
+    showToast('已禁用邮件通知', 'success');
+  }
+
+  saveConfig();
+});
+
+// SMTP配置相关
+const smtpModal = document.getElementById('smtpModal');
+const configSmtpBtn = document.getElementById('configSmtpBtn');
+const closeSmtpModal = document.getElementById('closeSmtpModal');
+const saveSmtpBtn = document.getElementById('saveSmtpBtn');
+const cancelSmtpBtn = document.getElementById('cancelSmtpBtn');
+const smtpProvider = document.getElementById('smtpProvider');
+
+// 邮箱服务商预设配置
+const smtpProviders = {
+  qq: { host: 'smtp.qq.com', port: 587, secure: false },
+  '163': { host: 'smtp.163.com', port: 465, secure: true },
+  gmail: { host: 'smtp.gmail.com', port: 587, secure: true },
+  outlook: { host: 'smtp-mail.outlook.com', port: 587, secure: true }
+};
+
+// 打开SMTP配置弹窗
+configSmtpBtn.addEventListener('click', () => {
+  ipcRenderer.send('get-smtp-config');
+});
+
+// 关闭SMTP配置弹窗
+closeSmtpModal.addEventListener('click', () => {
+  smtpModal.classList.remove('show');
+});
+
+cancelSmtpBtn.addEventListener('click', () => {
+  smtpModal.classList.remove('show');
+});
+
+// 邮箱服务商选择变化
+smtpProvider.addEventListener('change', () => {
+  const provider = smtpProvider.value;
+  const customSmtpConfig = document.getElementById('customSmtpConfig');
+  const customSmtpPort = document.getElementById('customSmtpPort');
+
+  if (provider === 'custom') {
+    customSmtpConfig.style.display = 'block';
+    customSmtpPort.style.display = 'block';
+  } else {
+    customSmtpConfig.style.display = 'none';
+    customSmtpPort.style.display = 'none';
+  }
+});
+
+// 接收SMTP配置响应
+ipcRenderer.on('smtp-config-response', (_, config) => {
+  if (config.user) {
+    document.getElementById('smtpUser').value = config.user;
+  }
+  if (config.pass) {
+    document.getElementById('smtpPass').value = config.pass;
+  }
+  if (config.provider) {
+    smtpProvider.value = config.provider;
+    // 触发change事件以更新UI
+    smtpProvider.dispatchEvent(new Event('change'));
+  }
+  if (config.host) {
+    document.getElementById('smtpHost').value = config.host;
+  }
+  if (config.port) {
+    document.getElementById('smtpPort').value = config.port;
+  }
+
+  smtpModal.classList.add('show');
+});
+
+// 保存SMTP配置
+saveSmtpBtn.addEventListener('click', async () => {
+  const provider = smtpProvider.value;
+  let config = {
+    provider: provider,
+    user: document.getElementById('smtpUser').value.trim(),
+    pass: document.getElementById('smtpPass').value
+  };
+
+  if (!config.user) {
+    showToast('请输入邮箱地址', 'warning');
+    return;
+  }
+
+  if (!config.pass) {
+    showToast('请输入授权码/密码', 'warning');
+    return;
+  }
+
+  // 根据服务商设置SMTP配置
+  if (provider === 'custom') {
+    config.host = document.getElementById('smtpHost').value.trim();
+    config.port = parseInt(document.getElementById('smtpPort').value) || 587;
+    config.secure = config.port === 465 || config.port === 993;
+
+    if (!config.host) {
+      showToast('请输入SMTP服务器地址', 'warning');
+      return;
+    }
+  } else {
+    const preset = smtpProviders[provider];
+    config.host = preset.host;
+    config.port = preset.port;
+    config.secure = preset.secure;
+  }
+
+  // 保存配置
+  ipcRenderer.send('save-smtp-config', config);
+  showToast('邮件配置已保存', 'success');
+
+  // 如果选择了发送测试邮件
+  const testEmail = document.getElementById('testEmail').checked;
+  if (testEmail) {
+    ipcRenderer.send('send-email-notification', {
+      title: '通知小助手 - 测试邮件',
+      body: '这是一封测试邮件，您的邮件配置已成功！\n\n如果您收到此邮件，说明邮件通知功能已正常工作。'
+    });
+  }
+
+  smtpModal.classList.remove('show');
 });
 
 // 页面加载时获取配置

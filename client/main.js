@@ -1,12 +1,14 @@
 const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, screen } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
+const nodemailer = require('nodemailer');
 
 const store = new Store();
 let mainWindow;
 let tray;
 let activeNotifications = new Map(); // 存储活跃的通知
 let customNotificationWindows = new Map(); // 存储自定义通知窗口
+let emailTransporter = null; // 邮件发送器实例
 
 // 设置开机自启动
 function setAutoStart(enable) {
@@ -497,6 +499,74 @@ app.on('window-all-closed', () => {
 // IPC通信
 ipcMain.on('show-notification', (event, { title, body, messageId }) => {
   showNotification(title, body, messageId);
+});
+
+// 发送邮件通知
+async function sendEmailNotification(title, body) {
+  const config = store.get('config', {});
+
+  // 检查是否启用邮件通知
+  if (!config.emailNotification) {
+    return;
+  }
+
+  // 检查是否配置了SMTP服务器
+  const smtpConfig = store.get('smtp', {});
+  if (!smtpConfig.host || !smtpConfig.user || !smtpConfig.pass) {
+    console.log('未配置SMTP服务器，跳过邮件通知');
+    return;
+  }
+
+  try {
+    // 创建邮件发送器（每次重新创建，确保配置最新）
+    emailTransporter = nodemailer.createTransport({
+      host: smtpConfig.host,
+      port: smtpConfig.port || 587,
+      secure: smtpConfig.secure || false,
+      auth: {
+        user: smtpConfig.user,
+        pass: smtpConfig.pass
+      }
+    });
+
+    // 发送邮件（自己给自己发）
+    const info = await emailTransporter.sendMail({
+      from: smtpConfig.user,
+      to: smtpConfig.user, // 发送到自己的邮箱
+      subject: title,
+      text: body,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #667eea;">${title}</h2>
+          <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin-top: 20px;">
+            <p style="color: #333; line-height: 1.6;">${body.replace(/\n/g, '<br>')}</p>
+          </div>
+          <p style="color: #999; font-size: 12px; margin-top: 20px;">此邮件由通知小助手自动发送，请勿回复。</p>
+        </div>
+      `
+    });
+
+    console.log('邮件发送成功:', info.messageId);
+  } catch (error) {
+    console.error('邮件发送失败:', error);
+  }
+}
+
+// 监听服务器发送邮件的请求
+ipcMain.on('send-email-notification', async (event, { title, body }) => {
+  await sendEmailNotification(title, body);
+});
+
+// 保存SMTP配置
+ipcMain.on('save-smtp-config', (event, config) => {
+  store.set('smtp', config);
+  console.log('SMTP配置已保存');
+});
+
+// 获取SMTP配置
+ipcMain.on('get-smtp-config', (event) => {
+  const config = store.get('smtp', {});
+  event.reply('smtp-config-response', config);
 });
 
 ipcMain.on('notification-read', (event, { messageId }) => {

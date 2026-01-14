@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>通知小助手</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="modal.css">
 </head>
 <body>
   <div id="toast-container"></div>
@@ -60,6 +61,15 @@
               <input type="checkbox" id="centerNotificationCheckbox" />
               <span>居中显示通知</span>
             </label>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="emailNotificationCheckbox" />
+              <span>邮件通知</span>
+            </label>
+          </div>
+          <div class="form-group" id="smtpConfigGroup" style="display: none;">
+            <button id="configSmtpBtn" class="btn btn-secondary btn-full">配置SMTP服务器</button>
           </div>
         </div>
       </aside>
@@ -122,6 +132,55 @@
           </div>
         </div>
       </main>
+    </div>
+  </div>
+
+  <!-- SMTP配置弹窗 -->
+  <div id="smtpModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>邮件通知配置</h3>
+        <span class="modal-close" id="closeSmtpModal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>邮箱:</label>
+          <input type="email" id="smtpUser" placeholder="例如: yourname@qq.com" />
+          <small style="color: #999;">邮件将发送到此邮箱</small>
+        </div>
+        <div class="form-group">
+          <label>授权码/密码:</label>
+          <input type="password" id="smtpPass" placeholder="邮箱授权码或密码" />
+        </div>
+        <div class="form-group">
+          <label>邮箱服务商:</label>
+          <select id="smtpProvider">
+            <option value="qq">QQ邮箱</option>
+            <option value="163">163网易</option>
+            <option value="gmail">Gmail</option>
+            <option value="outlook">Outlook</option>
+            <option value="custom">自定义</option>
+          </select>
+        </div>
+        <div class="form-group" id="customSmtpConfig" style="display: none;">
+          <label>SMTP服务器:</label>
+          <input type="text" id="smtpHost" placeholder="例如: smtp.example.com" />
+        </div>
+        <div class="form-group" id="customSmtpPort" style="display: none;">
+          <label>端口:</label>
+          <input type="number" id="smtpPort" placeholder="例如: 587" value="587" />
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="testEmail" checked />
+            <span>保存后发送测试邮件</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="saveSmtpBtn" class="btn btn-primary">保存配置</button>
+        <button id="cancelSmtpBtn" class="btn btn-secondary">取消</button>
+      </div>
     </div>
   </div>
 
