@@ -201,6 +201,22 @@ function loadScheduledMessages() {
             }, delay);
 
             scheduledTasks.set(msg.id, task);
+
+            // 恢复准备提醒任务
+            if (msg.prepareReminder && msg.prepareReminderMinutes > 0) {
+              const prepareDelay = delay - msg.prepareReminderMinutes * 60 * 1000;
+              if (prepareDelay > 0) {
+                const prepareTask = setTimeout(() => {
+                  publishPrepareReminder(msg.topic, msg.content, msg.sender, msg.clientIP, msg.id, msg.prepareReminderMinutes);
+                  prepareReminderTasks.delete(msg.id);
+                  console.log(`恢复的准备提醒已发送: ${msg.id}`);
+                }, prepareDelay);
+                prepareReminderTasks.set(msg.id, prepareTask);
+              } else {
+                // 准备提醒时间已过，立即发送
+                publishPrepareReminder(msg.topic, msg.content, msg.sender, msg.clientIP, msg.id, msg.prepareReminderMinutes);
+              }
+            }
           }
         });
 
@@ -243,8 +259,9 @@ function startAutoSave() {
 const clients = new Map(); // Map<ws, {userId, subscriptions}>
 const messages = []; // 存储消息历史
 const topics = new Set(); // 存储所有主题
-const scheduledMessages = new Map(); // 存储定时消息 Map<id, {id, topic, content, sender, scheduledTime, clientIP}>
+const scheduledMessages = new Map(); // 存储定时消息 Map<id, {id, topic, content, sender, scheduledTime, clientIP, prepareReminder, prepareReminderMinutes}>
 const scheduledTasks = new Map(); // 存储定时任务 Map<id, task>
+const prepareReminderTasks = new Map(); // 存储准备提醒任务 Map<id, task>
 
 // 获取客户端IP地址
 function getClientIP(ws) {
@@ -465,12 +482,16 @@ function handlePublish(ws, payload, clientIP) {
 
 // 定时消息
 function handleSchedule(ws, payload, clientIP) {
-  const { topic, content, sender, scheduledTime, id } = payload;
+  const { id, topic, content, sender, scheduledTime, prepareReminder, prepareReminderMinutes } = payload;
 
   // 如果已存在相同ID的任务，先清除
   if (scheduledTasks.has(id)) {
     clearTimeout(scheduledTasks.get(id));
     scheduledMessages.delete(id);
+  }
+  if (prepareReminderTasks.has(id)) {
+    clearTimeout(prepareReminderTasks.get(id));
+    prepareReminderTasks.delete(id);
   }
 
   // 存储定时消息信息
@@ -480,7 +501,9 @@ function handleSchedule(ws, payload, clientIP) {
     content,
     sender,
     scheduledTime,
-    clientIP
+    clientIP,
+    prepareReminder: prepareReminder || false,
+    prepareReminderMinutes: prepareReminderMinutes || 5
   });
 
   // 计算延迟时间（毫秒）
@@ -499,7 +522,31 @@ function handleSchedule(ws, payload, clientIP) {
     publishScheduledMessage(topic, content, sender, clientIP);
     scheduledMessages.delete(id);
   } else {
-    // 设置定时任务
+    // 如果勾选了准备提醒，先设置准备提醒任务
+    if (prepareReminder && prepareReminderMinutes > 0) {
+      const prepareDelay = delay - prepareReminderMinutes * 60 * 1000;
+      if (prepareDelay > 0) {
+        const prepareTask = setTimeout(() => {
+          publishPrepareReminder(topic, content, sender, clientIP, id, prepareReminderMinutes);
+          prepareReminderTasks.delete(id);
+          console.log(`准备提醒已发送: ${id}`);
+        }, prepareDelay);
+        prepareReminderTasks.set(id, prepareTask);
+        writeLog('SCHEDULE', `设置准备提醒任务`, {
+          topic,
+          sender,
+          ip: clientIP,
+          messageId: id,
+          prepareMinutes: prepareReminderMinutes,
+          prepareTime: new Date(scheduledTime - prepareReminderMinutes * 60 * 1000).toLocaleString('zh-CN')
+        });
+      } else {
+        // 准备提醒时间已过，立即发送准备提醒
+        publishPrepareReminder(topic, content, sender, clientIP, id, prepareReminderMinutes);
+      }
+    }
+
+    // 设置主定时任务
     const task = setTimeout(() => {
       publishScheduledMessage(topic, content, sender, clientIP);
       scheduledTasks.delete(id);
@@ -561,6 +608,39 @@ function publishScheduledMessage(topic, content, sender, clientIP) {
   broadcastScheduledMessagesUpdate();
 }
 
+// 发送准备提醒
+function publishPrepareReminder(topic, content, sender, clientIP, originalMessageId, prepareMinutes) {
+  const message = {
+    id: Date.now(),
+    topic,
+    content: `距离正式提醒还有 ${prepareMinutes} 分钟，请做好准备！\n\n📋 ${content}`,
+    sender,
+    senderIP: clientIP,
+    timestamp: new Date().toISOString(),
+    isPrepareReminder: true,
+    prepareMinutes,
+    originalMessageId
+  };
+
+  clients.forEach((client, clientWs) => {
+    if (client.subscriptions.includes(topic)) {
+      clientWs.send(JSON.stringify({
+        type: 'MESSAGE',
+        payload: message
+      }));
+    }
+  });
+
+  writeLog('PREPARE_REMINDER', `准备提醒触发`, {
+    topic,
+    content,
+    sender,
+    ip: clientIP,
+    originalMessageId,
+    messageId: message.id
+  });
+}
+
 // 获取所有定时消息
 function handleGetScheduledMessages(ws, payload) {
   const { userId } = payload;
@@ -588,7 +668,7 @@ function handleGetScheduledMessages(ws, payload) {
 
 // 更新定时消息
 function handleUpdateScheduledMessage(ws, payload) {
-  const { id, topic, content, scheduledTime, userId } = payload;
+  const { id, topic, content, scheduledTime, userId, prepareReminder, prepareReminderMinutes } = payload;
   const client = clients.get(ws);
   const scheduledMessage = scheduledMessages.get(id);
 
@@ -599,6 +679,11 @@ function handleUpdateScheduledMessage(ws, payload) {
       clearTimeout(scheduledTasks.get(id));
       scheduledTasks.delete(id);
     }
+    // 清除旧的准备提醒任务
+    if (prepareReminderTasks.has(id)) {
+      clearTimeout(prepareReminderTasks.get(id));
+      prepareReminderTasks.delete(id);
+    }
 
     // 更新定时消息信息
     scheduledMessages.set(id, {
@@ -607,7 +692,9 @@ function handleUpdateScheduledMessage(ws, payload) {
       content,
       sender: userId,
       scheduledTime,
-      clientIP: scheduledMessage.clientIP
+      clientIP: scheduledMessage.clientIP,
+      prepareReminder: prepareReminder || false,
+      prepareReminderMinutes: prepareReminderMinutes || 5
     });
 
     // 计算新的延迟时间
@@ -625,6 +712,28 @@ function handleUpdateScheduledMessage(ws, payload) {
       publishScheduledMessage(topic, content, userId, scheduledMessage.clientIP);
       scheduledMessages.delete(id);
     } else {
+      // 如果勾选了准备提醒，先设置准备提醒任务
+      if (prepareReminder && prepareReminderMinutes > 0) {
+        const prepareDelay = delay - prepareReminderMinutes * 60 * 1000;
+        if (prepareDelay > 0) {
+          const prepareTask = setTimeout(() => {
+            publishPrepareReminder(topic, content, userId, scheduledMessage.clientIP, id, prepareReminderMinutes);
+            prepareReminderTasks.delete(id);
+            console.log(`更新的准备提醒已发送: ${id}`);
+          }, prepareDelay);
+          prepareReminderTasks.set(id, prepareTask);
+          writeLog('UPDATE_SCHEDULE', `更新准备提醒任务`, {
+            topic,
+            userId,
+            messageId: id,
+            prepareMinutes: prepareReminderMinutes
+          });
+        } else {
+          // 准备提醒时间已过或即将到来，立即发送
+          publishPrepareReminder(topic, content, userId, scheduledMessage.clientIP, id, prepareReminderMinutes);
+        }
+      }
+
       // 设置新的定时任务
       const task = setTimeout(() => {
         publishScheduledMessage(topic, content, userId, scheduledMessage.clientIP);
@@ -672,6 +781,11 @@ function handleDeleteScheduledMessage(ws, payload) {
     if (scheduledTasks.has(id)) {
       clearTimeout(scheduledTasks.get(id));
       scheduledTasks.delete(id);
+    }
+    // 清除准备提醒任务
+    if (prepareReminderTasks.has(id)) {
+      clearTimeout(prepareReminderTasks.get(id));
+      prepareReminderTasks.delete(id);
     }
 
     // 删除定时消息
@@ -778,6 +892,12 @@ function gracefulShutdown() {
   scheduledTasks.forEach((task, id) => {
     clearTimeout(task);
     console.log(`取消定时任务: ${id}`);
+  });
+
+  // 取消所有准备提醒任务
+  prepareReminderTasks.forEach((task, id) => {
+    clearTimeout(task);
+    console.log(`取消准备提醒任务: ${id}`);
   });
 
   // 保存所有数据

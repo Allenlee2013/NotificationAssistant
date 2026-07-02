@@ -28,6 +28,9 @@ const scheduleBtn = document.getElementById('scheduleBtn');
 const scheduleCard = document.getElementById('scheduleCard');
 const confirmScheduleBtn = document.getElementById('confirmScheduleBtn');
 const cancelScheduleBtn = document.getElementById('cancelScheduleBtn');
+const prepareReminderCheckbox = document.getElementById('prepareReminderCheckbox');
+const prepareReminderMinutes = document.getElementById('prepareReminderMinutes');
+const prepareReminderGroup = document.getElementById('prepareReminderGroup');
 
 const immediateMessagesContainer = document.getElementById('immediateMessagesContainer');
 const scheduledMessagesContainer = document.getElementById('scheduledMessagesContainer');
@@ -364,6 +367,13 @@ function handleServerMessage(data) {
         updateImmediateMessagesList();
         showNotification(payload);
         console.log('定时消息添加到即时消息列表');
+      } else if (payload.isPrepareReminder) {
+        // 准备提醒：标记为未读，添加到即时消息
+        payload.read = false;
+        immediateMessages.unshift(payload);
+        updateImmediateMessagesList();
+        showNotification(payload);
+        console.log('准备提醒添加到即时消息列表');
       } else {
         // 即时消息：标记为未读
         payload.read = false;
@@ -549,6 +559,9 @@ scheduleBtn.addEventListener('click', () => {
   timeInput.value = `${hours}:${minutes}`;
 
   scheduleCard.style.display = 'block';
+
+  // 重置准备提醒设置
+  resetPrepareReminder();
 });
 
 // 确认定时
@@ -598,6 +611,10 @@ confirmScheduleBtn.addEventListener('click', () => {
     return;
   }
 
+  // 准备提醒参数
+  const prepareReminder = prepareReminderCheckbox.checked;
+  const prepareMinutes = parseInt(prepareReminderMinutes.value) || 5;
+
   // 根据是否处于编辑模式，发送不同的请求
   if (editingMessageId) {
     // 编辑模式：更新现有消息
@@ -608,7 +625,9 @@ confirmScheduleBtn.addEventListener('click', () => {
         topic,
         content,
         scheduledTime: scheduledTimestamp,
-        userId
+        userId,
+        prepareReminder,
+        prepareReminderMinutes: prepareMinutes
       }
     }));
     showToast('定时消息更新成功', 'success');
@@ -621,7 +640,9 @@ confirmScheduleBtn.addEventListener('click', () => {
         topic,
         content,
         sender: userId,
-        scheduledTime: scheduledTimestamp
+        scheduledTime: scheduledTimestamp,
+        prepareReminder,
+        prepareReminderMinutes: prepareMinutes
       }
     }));
     showToast('定时消息设置成功', 'success');
@@ -645,6 +666,9 @@ cancelScheduleBtn.addEventListener('click', () => {
   publishBtn.style.display = 'inline-block';
   scheduleBtn.style.display = 'inline-block';
   editingMessageId = null; // 清除编辑状态
+
+  // 重置准备提醒设置
+  resetPrepareReminder();
 });
 
 // 更新即时消息列表
@@ -655,10 +679,11 @@ function updateImmediateMessagesList() {
   }
 
   immediateMessagesContainer.innerHTML = immediateMessages.map(msg => `
-    <div class="message-item ${msg.scheduled ? 'scheduled' : ''} ${msg.read ? 'read' : 'unread'}" data-message-id="${msg.id}">
+    <div class="message-item ${msg.scheduled ? 'scheduled' : ''} ${msg.isPrepareReminder ? 'prepare-reminder' : ''} ${msg.read ? 'read' : 'unread'}" data-message-id="${msg.id}">
       <div class="message-header">
         <div>
           <span class="message-topic">${msg.topic}</span>
+          ${msg.isPrepareReminder ? '<span class="message-prepare-badge">⏰ 准备提醒</span>' : ''}
           ${msg.scheduled ? '<span class="message-scheduled-badge">定时消息</span>' : ''}
         </div>
         <div>
@@ -667,6 +692,7 @@ function updateImmediateMessagesList() {
           <span class="message-time">${new Date(msg.timestamp).toLocaleString('zh-CN')}</span>
         </div>
       </div>
+      ${msg.isPrepareReminder ? '<div class="prepare-reminder-label">━━━━ 准备提醒 ━━━━</div>' : ''}
       <div class="message-content">${msg.content}</div>
       ${!msg.read ? `<button class="close-notification-btn" data-message-id="${msg.id}" title="关闭通知">关闭通知</button>` : ''}
     </div>
@@ -690,10 +716,11 @@ function updateHistoryMessagesList() {
   }
 
   historyMessagesContainer.innerHTML = historyMessages.map(msg => `
-    <div class="message-item ${msg.scheduled ? 'scheduled' : ''} read" data-message-id="${msg.id}">
+    <div class="message-item ${msg.scheduled ? 'scheduled' : ''} ${msg.isPrepareReminder ? 'prepare-reminder' : ''} read" data-message-id="${msg.id}">
       <div class="message-header">
         <div>
           <span class="message-topic">${msg.topic}</span>
+          ${msg.isPrepareReminder ? '<span class="message-prepare-badge">⏰ 准备提醒</span>' : ''}
           ${msg.scheduled ? '<span class="message-scheduled-badge">定时消息</span>' : ''}
         </div>
         <div>
@@ -702,6 +729,7 @@ function updateHistoryMessagesList() {
           <span class="message-time">${new Date(msg.timestamp).toLocaleString('zh-CN')}</span>
         </div>
       </div>
+      ${msg.isPrepareReminder ? '<div class="prepare-reminder-label">━━━━ 准备提醒 ━━━━</div>' : ''}
       <div class="message-content">${msg.content}</div>
     </div>
   `).join('');
@@ -808,7 +836,7 @@ function updateAvailableTopics() {
 // 显示系统通知
 function showNotification(message) {
   ipcRenderer.send('show-notification', {
-    title: `[${message.topic}] 新消息`,
+    title: message.isPrepareReminder ? `[${message.topic}] ⏰ 准备提醒` : `[${message.topic}] 新消息`,
     body: message.content,
     messageId: message.id
   });
@@ -928,6 +956,18 @@ emailNotificationCheckbox.addEventListener('change', () => {
 
   saveConfig();
 });
+
+// 准备提醒复选框事件
+prepareReminderCheckbox.addEventListener('change', () => {
+  prepareReminderGroup.style.display = prepareReminderCheckbox.checked ? 'block' : 'none';
+});
+
+// 重置准备提醒设置
+function resetPrepareReminder() {
+  prepareReminderCheckbox.checked = false;
+  prepareReminderGroup.style.display = 'none';
+  prepareReminderMinutes.value = '15';
+}
 
 // SMTP配置相关
 const smtpModal = document.getElementById('smtpModal');
@@ -1088,6 +1128,7 @@ function updateScheduledMessagesList() {
           <span class="scheduled-message-time">${scheduledDate}</span>
         </div>
         <div class="scheduled-message-content">${msg.content}</div>
+        ${msg.prepareReminder ? `<div class="scheduled-message-prepare">准备提醒: 提前 ${msg.prepareReminderMinutes || 5} 分钟</div>` : ''}
         <div class="scheduled-message-footer">
           <span class="scheduled-message-sender">发送者: ${msg.sender}</span>
           ${isOwner ? `
@@ -1134,6 +1175,15 @@ window.editScheduledMessage = (id) => {
 
   // 显示定时设置卡片
   scheduleCard.style.display = 'block';
+
+  // 填充准备提醒设置
+  if (msg.prepareReminder) {
+    prepareReminderCheckbox.checked = true;
+    prepareReminderGroup.style.display = 'block';
+    prepareReminderMinutes.value = msg.prepareReminderMinutes || 5;
+  } else {
+    resetPrepareReminder();
+  }
 };
 
 // 删除定时消息

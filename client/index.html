@@ -104,6 +104,16 @@
             <label>发送时间:</label>
             <input type="time" id="scheduleTime" />
           </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="prepareReminderCheckbox" />
+              <span>发送准备提醒</span>
+            </label>
+          </div>
+          <div class="form-group" id="prepareReminderGroup" style="display: none;">
+            <label>提前时间（分钟）:</label>
+            <input type="number" id="prepareReminderMinutes" value="15" min="1" max="1440" />
+          </div>
           <div class="form-row">
             <button id="confirmScheduleBtn" class="btn btn-success">确认定时</button>
             <button id="cancelScheduleBtn" class="btn btn-secondary">取消</button>

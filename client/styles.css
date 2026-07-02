@@ -105,6 +105,8 @@ header h1 {
 input[type="text"],
 input[type="password"],
 input[type="number"],
+input[type="date"],
+input[type="time"],
 textarea,
 select {
   width: 100%;
@@ -322,6 +324,52 @@ small {
   margin-left: 8px;
 }
 
+.message-prepare-badge {
+  display: inline-block;
+  background: #c8e6c9;
+  color: #2e7d32;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  margin-left: 8px;
+  font-weight: 600;
+}
+
+.message-item.prepare-reminder {
+  border-left: 5px dashed #4CAF50;
+  background: #f1f8e9;
+}
+
+.message-item.prepare-reminder.unread {
+  background: #e8f5e9;
+  border-left: 5px dashed #388E3C;
+  box-shadow: inset 0 0 0 1px rgba(76, 175, 80, 0.15);
+}
+
+.message-item.prepare-reminder:hover {
+  background: #dcedc8;
+}
+
+.prepare-reminder-label {
+  text-align: center;
+  color: #4CAF50;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  letter-spacing: 2px;
+}
+
+.scheduled-message-prepare {
+  color: #2e7d32;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  background: #c8e6c9;
+  border-radius: 4px;
+  display: inline-block;
+}
+
 .empty-state {
   text-align: center;
   color: #999;
@@ -373,6 +421,18 @@ small {
   font-size: 14px;
   line-height: 1.5;
   margin-bottom: 10px;
+}
+
+.scheduled-message-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #666;
+}
+
+.scheduled-message-sender {
+  color: #999;
 }
 
 .scheduled-message-actions {
